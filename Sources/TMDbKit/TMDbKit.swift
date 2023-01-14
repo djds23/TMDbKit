@@ -8,13 +8,22 @@ public struct Actor: Codable, Hashable {
 }
 
 public struct MovieService {
-    public var fetchActors: (String) async throws -> Set<Actor>
+    public struct ActorRequest {
+        public init(apiKey: String, page: Int = 1) {
+            self.apiKey = apiKey
+            self.page = page
+        }
+
+        var apiKey: String
+        var page: Int
+    }
+    public var fetchActors: (ActorRequest) async throws -> Set<Actor>
 }
 
 extension MovieService {
     public static var live: MovieService {
         let client = MovieClient()
-        return MovieService(fetchActors: client.fetchActors(apiKey:))
+        return MovieService(fetchActors: client.fetchActors)
     }
 }
 
@@ -43,26 +52,26 @@ actor Store {
 class MovieClient {
     let store = Store()
 
-    func fetchActors(apiKey: String) async throws -> Set<Actor> {
-        let movies = try await requestMovies(apiKey: apiKey)
+    func fetchActors(request: MovieService.ActorRequest) async throws -> Set<Actor> {
+        let movies = try await requestMovies(request: request)
         for movie in movies.results {
-            let credits = try await creditsForMovie(apiKey: apiKey, movie: movie)
+            let credits = try await creditsForMovie(apiKey: request.apiKey, movie: movie)
             await store.addActors(credits)
         }
 
         return await store.actors
     }
 
-    func requestMovies(apiKey: String) async throws -> Movies {
+    func requestMovies(request: MovieService.ActorRequest) async throws -> Movies {
         guard
             var URL = URL(string: "https://api.themoviedb.org/3/discover/movie")
         else {
             fatalError("wrong URL")
         }
         let URLParams = [
-            "api_key": apiKey,
+            "api_key": request.apiKey,
             "sort": "popularity.desc",
-            "page": "2"
+            "page": "\(request.page)"
         ]
         URL = URL.appendingQueryParameters(URLParams)
         var request = URLRequest(url: URL)
